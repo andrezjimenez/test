@@ -139,3 +139,13 @@ plt.show()
 
 print("Cantidad de Clientes por Tienda:")
 print(customer_count_df)
+
+
+inventory_rental_df = pd.merge(inventory_df, rental_df, on='inventory_id', how='inner')
+film_rental_df = pd.merge(inventory_rental_df, film_df, on='film_id', how='inner')
+rented_film_ids = film_rental_df['film_id'].unique()
+unrented_films = film_df[~film_df['film_id'].isin(rented_film_ids)]
+
+print("🎬 Películas que NO fueron alquiladas:")
+print(unrented_films[['film_id', 'title']])
+
