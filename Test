@@ -1,0 +1,141 @@
+!pip install pyspark
+!pip install findspark
+!pip install pandas
+!pip install openpyxl
+
+import findspark  # This helps us find and use Apache Spark
+findspark.init()  # Initialize findspark to locate Spark
+from pyspark.sql import SparkSession  
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, LongType, DateType
+import pandas as pd  
+import matplotlib.pyplot as plt
+
+# Initialize a Spark Session
+spark = SparkSession \
+    .builder \
+    .appName("COVID-19 Data Analysis") \
+    .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
+    .getOrCreate()
+
+if 'spark' in locals() and isinstance(spark, SparkSession):
+    print("SparkSession is active and ready to use.")
+else:
+    print("SparkSession is not active. Please create a SparkSession.")
+
+file_path = 'Films_2.xlsx'
+sheets = pd.read_excel(file_path, sheet_name=None)
+
+sheets.pop("MER", None)
+print("Hojas cargadas:", sheets.keys())
+
+columns_to_clean = ['release_year', 'rental_rate', 'replacement_cost','film_id']
+
+df = sheets['film']
+
+for col in columns_to_clean:
+    if col in df.columns:
+        # Reemplazar caracteres no numéricos y convertir a numérico
+        df[col] = df[col].astype(str).str.replace(r'\D', '', regex=True)
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+inventory_df['store_id'] = inventory_df['store_id'].astype(str).str.replace(r'\D', '', regex=True)
+inventory_df['store_id'] = pd.to_numeric(inventory_df['store_id'], errors='coerce')
+
+sheets['inventory'] = inventory_df
+
+for sheet_name, df in sheets.items():
+    df.columns = df.columns.str.strip()
+
+film_df = sheets['film']
+
+film_df = film_df.drop_duplicates()
+
+sheets['film'] = film_df
+
+print("Duplicados eliminados en la hoja 'film'. Total de registros ahora:", len(film_df))
+
+for sheet_name, df in sheets.items():
+    print(f"\n Hoja: {sheet_name}")
+    print("Columnas y tipos de datos:")
+    print(df.info())
+    print("\nValores nulos:")
+    print(df.isnull().sum())
+
+film_df = sheets['film']
+inventory_df = sheets['inventory']
+rental_df = sheets['rental']
+customer_df = sheets['customer']
+store_df = sheets['store']
+
+for sheet_name, df in sheets.items():
+    df.columns = df.columns.str.strip()
+
+inventory_store_df = pd.merge(inventory_df, store_df, on='store_id', how='inner')
+rental_inventory_store_df = pd.merge(rental_df, inventory_store_df, on='inventory_id', how='inner')
+
+rentas_por_tienda = rental_inventory_store_df['store_id'].value_counts()
+
+print("Rentas por tienda:")
+print(rentas_por_tienda)
+
+plt.figure(figsize=(8, 5))
+rentas_por_tienda.plot(kind='bar', color='skyblue')
+plt.title('Rentas por Tienda')
+plt.xlabel('ID de la Tienda')
+plt.ylabel('Número de Rentas')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.show()
+
+inventory_rental_df = pd.merge(inventory_df, rental_df, on='inventory_id', how='inner')
+
+film_rental_df = pd.merge(inventory_rental_df, film_df, on='film_id', how='inner')
+
+top_films = (
+    film_rental_df['title']
+    .value_counts()
+    .head(10)
+    .reset_index()
+    .rename(columns={'index': 'title', 'title': 'rental_count'})
+)
+
+print("Top 10 de Películas Más Alquiladas:")
+print(top_films)
+
+rental_customer_df = pd.merge(rental_df, customer_df, on='customer_id', how='inner')
+
+
+top_customers = rental_customer_df['customer_id'].value_counts().head(10)
+
+top_customers_df = pd.merge(top_customers.rename('total_rentals').reset_index(), customer_df, left_on='index', right_on='customer_id')
+
+top_customers_df = top_customers_df[['first_name', 'last_name', 'email', 'total_rentals']].sort_values(by='total_rentals', ascending=False)
+print("Top 10 Clientes Más Recurrentes:")
+print(top_customers_df)
+
+plt.figure(figsize=(10, 6))
+plt.barh(top_customers_df['first_name'] + ' ' + top_customers_df['last_name'], top_customers_df['total_rentals'], color='skyblue')
+plt.xlabel('Cantidad de Alquileres')
+plt.ylabel('Clientes')
+plt.title('Top 10 Clientes Más Recurrentes')
+plt.gca().invert_yaxis()  # Invertir el eje Y para mostrar el más alto arriba
+plt.grid(axis='x', linestyle='--', alpha=0.7)
+plt.show()
+
+print("Top 10 Clientes Más Recurrentes:")
+
+customer_count = customer_df['store_id'].value_counts()
+
+customer_count_df = customer_count.reset_index()
+customer_count_df.columns = ['store_id', 'customer_count']
+
+plt.figure(figsize=(8, 5))
+plt.bar(customer_count_df['store_id'], customer_count_df['customer_count'], color=['#1f77b4', '#ff7f0e'])
+plt.title('Número de Clientes por Tienda')
+plt.xlabel('ID de la Tienda')
+plt.ylabel('Cantidad de Clientes')
+plt.xticks(rotation=0)
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.show()
+
+print("Cantidad de Clientes por Tienda:")
+print(customer_count_df)
